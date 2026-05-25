@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Publicaciones app
 
-## Getting Started
+App en Next.js para listar, buscar, crear, editar y borrar publicaciones. Los datos vienen de [JSONPlaceholder](https://jsonplaceholder.typicode.com) y los cambios se guardan en el navegador (`localStorage`).
 
-First, run the development server:
+## Requisitos
+
+- Node.js 18+
+- npm
+
+## Cómo ejecutar el proyecto
 
 ```bash
+git clone https://github.com/paulandreacl/prueba-tecnica-front.git
+cd prueba-tecnica-front
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Cómo correr en local (producción)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+Abre [http://localhost:3000](http://localhost:3000).
 
-To learn more about Next.js, take a look at the following resources:
+Otros scripts: `npm run lint`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Demo en línea:** [https://prueba-tecnica-front-phi.vercel.app](https://prueba-tecnica-front-phi.vercel.app)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Cómo utilizar la aplicación
 
-## Deploy on Vercel
+| Ruta | Qué hace |
+|------|----------|
+| `/` | Inicio; enlace al listado |
+| `/listado` | Lista con scroll infinito y búsqueda por título o contenido |
+| `/detalle/[id]` | Ver una publicación |
+| `/nuevo` | Crear publicación |
+| `/editar/[id]` | Editar publicación |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+En el listado, cada tarjeta tiene:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Ojo** — ver detalle
+- **Lápiz** — editar
+- **Papelera** — eliminar (con confirmación)
+
+Los posts creados o modificados se guardan en `localStorage` del navegador; la API remota no persiste esos cambios.
+
+## Tecnologías
+
+Next.js, TypeScript, HeroUI, Formik, Zustand, Tailwind.
+
+## Notas
+
+- No se necesitan variables de entorno.
+- Para restaurar datos de prueba: borra en el navegador `posts_local` y `posts_images`.
+
+## Autor
+
+Paula Andrea Calderón — paulacalderon1509@gmail.com
