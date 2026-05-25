@@ -100,6 +100,20 @@ export function attachImagesToPosts(posts: Post[]): Post[] {
   return posts.map(withImage);
 }
 
+export function sortPostsNewestFirst(posts: Post[]): Post[] {
+  return [...posts].sort((a, b) => b.id - a.id);
+}
+
+export function mergePostsById(...groups: Post[][]): Post[] {
+  const byId = new Map<number, Post>();
+  for (const group of groups) {
+    for (const post of group) {
+      byId.set(post.id, post);
+    }
+  }
+  return sortPostsNewestFirst([...byId.values()]);
+}
+
 async function ensurePosts(): Promise<Post[]> {
   const cached = readLocalPosts();
   if (cached) return cached;
@@ -115,7 +129,9 @@ function getLocalId(posts: Post[]) {
 }
 
 export async function getAllPosts() {
-  return attachImagesToPosts(await ensurePosts());
+  return attachImagesToPosts(
+    sortPostsNewestFirst(await ensurePosts()),
+  );
 }
 
 async function fetchPostsPageFromApi(
@@ -138,15 +154,18 @@ export async function getPostsPage(
 ): Promise<{ posts: Post[]; hasMore: boolean }> {
   const cached = readLocalPosts();
   if (cached) {
+    const sorted = sortPostsNewestFirst(cached);
     const start = page * limit;
-    const posts = attachImagesToPosts(cached.slice(start, start + limit));
+    const posts = attachImagesToPosts(sorted.slice(start, start + limit));
     return {
       posts,
-      hasMore: start + posts.length < cached.length,
+      hasMore: start + posts.length < sorted.length,
     };
   }
 
-  const posts = attachImagesToPosts(await fetchPostsPageFromApi(page, limit));
+  const posts = attachImagesToPosts(
+    sortPostsNewestFirst(await fetchPostsPageFromApi(page, limit)),
+  );
   return {
     posts,
     hasMore: posts.length >= limit,
@@ -192,8 +211,7 @@ export async function updatePost(id: number, data: PostFormData) {
     setPostImage(id, data.imageUrl);
   }
 
-  const next = [...posts];
-  next[index] = updated;
+  const next = [updated, ...posts.filter((p) => p.id !== id)];
   saveLocalPosts(next);
   return withImage(updated);
 }

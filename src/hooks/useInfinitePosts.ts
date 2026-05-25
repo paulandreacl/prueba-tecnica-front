@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { attachImagesToPosts, getPostsPage } from "../lib/api";
+import { usePathname } from "next/navigation";
+import {
+  attachImagesToPosts,
+  getPostsPage,
+  mergePostsById,
+} from "../lib/api";
 import { POSTS_PER_PAGE } from "../lib/constants";
 import { usePostsStore } from "../store/posts.store";
 import type { Post } from "../types/post";
@@ -18,15 +23,6 @@ function filterPosts(posts: Post[], search: string) {
   );
 }
 
-function uniquePostsById(posts: Post[]) {
-  const seen = new Set<number>();
-  return posts.filter((post) => {
-    if (seen.has(post.id)) return false;
-    seen.add(post.id);
-    return true;
-  });
-}
-
 export type InfinitePostsInitialData = {
   posts: Post[];
   hasMore: boolean;
@@ -36,6 +32,7 @@ export default function useInfinitePosts(
   debouncedSearch = "",
   initialData?: InfinitePostsInitialData,
 ) {
+  const pathname = usePathname();
   const loadAllPosts = usePostsStore((s) => s.loadAllPosts);
   const appendToCache = usePostsStore((s) => s.appendPosts);
   const removeFromCache = usePostsStore((s) => s.removePostById);
@@ -54,6 +51,36 @@ export default function useInfinitePosts(
   const searchSourceRef = useRef<Post[]>([]);
   const isSearching = debouncedSearch.trim().length > 0;
 
+  const syncVisibleFromStore = useCallback(
+    (source: Post[]) => {
+      if (!source.length) return;
+
+      if (isSearching) {
+        const filtered = mergePostsById(
+          filterPosts(source, debouncedSearch),
+        );
+        searchSourceRef.current = filtered;
+        setTotalFiltered(filtered.length);
+        setPosts((prev) => {
+          const take = Math.max(prev.length, POSTS_PER_PAGE);
+          const visible = filtered.slice(0, take);
+          setHasNextPage(filtered.length > visible.length);
+          return visible;
+        });
+        return;
+      }
+
+      const sorted = mergePostsById(source);
+      setPosts((prev) => {
+        const take = Math.max(prev.length, POSTS_PER_PAGE);
+        const visible = sorted.slice(0, take);
+        setHasNextPage(sorted.length > visible.length);
+        return visible;
+      });
+    },
+    [debouncedSearch, isSearching],
+  );
+
   const loadFirstPage = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -65,7 +92,7 @@ export default function useInfinitePosts(
     try {
       if (isSearching) {
         await loadAllPosts();
-        const filtered = uniquePostsById(
+        const filtered = mergePostsById(
           filterPosts(usePostsStore.getState().posts, debouncedSearch),
         );
         searchSourceRef.current = filtered;
@@ -80,7 +107,7 @@ export default function useInfinitePosts(
 
       searchSourceRef.current = [];
       const { posts: chunk, hasMore } = await getPostsPage(0);
-      const first = uniquePostsById(chunk);
+      const first = mergePostsById(chunk);
       appendToCache(first);
       setPosts(first);
       setPage(1);
@@ -102,21 +129,46 @@ export default function useInfinitePosts(
       !ssrBootstrapDoneRef.current
     ) {
       ssrBootstrapDoneRef.current = true;
-      const first = uniquePostsById(
-        attachImagesToPosts(initialSnapshotRef.current.posts),
-      );
-      appendToCache(first);
-      setPosts(first);
+      const cached = usePostsStore.getState().posts;
+      const fromSsr = attachImagesToPosts(initialSnapshotRef.current.posts);
+      const merged = mergePostsById(cached, fromSsr);
+      const firstPage = merged.slice(0, POSTS_PER_PAGE);
+      usePostsStore.setState({ posts: merged });
+      setPosts(firstPage);
+      setPage(1);
+      setHasNextPage(merged.length > POSTS_PER_PAGE);
+      setIsLoading(false);
       return;
     }
 
     void loadFirstPage();
-  }, [appendToCache, debouncedSearch, loadFirstPage]);
+  }, [debouncedSearch, loadFirstPage]);
 
   useEffect(() => {
     if (isSearching) return;
     loadAllPosts().catch(() => {});
   }, [loadAllPosts, isSearching]);
+
+  useEffect(() => {
+    if (pathname !== "/listado") return;
+
+    const runSync = () => {
+      if (isLoading) return;
+      const source = usePostsStore.getState().posts;
+      if (!source.length) return;
+      syncVisibleFromStore(source);
+    };
+
+    const frame = requestAnimationFrame(runSync);
+    const unsub = usePostsStore.subscribe((state, prev) => {
+      if (state.posts === prev.posts) return;
+      runSync();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      unsub();
+    };
+  }, [pathname, isLoading, syncVisibleFromStore]);
 
   const fetchNextPage = useCallback(async () => {
     if (!hasNextPage || isLoading || fetchingRef.current) return;
@@ -135,7 +187,7 @@ export default function useInfinitePosts(
           return;
         }
 
-        setPosts((prev) => uniquePostsById([...prev, ...chunk]));
+        setPosts((prev) => mergePostsById(prev, chunk));
         const nextPage = page + 1;
         setPage(nextPage);
         setHasNextPage(nextPage * POSTS_PER_PAGE < source.length);
@@ -143,7 +195,7 @@ export default function useInfinitePosts(
       }
 
       const { posts: chunk, hasMore } = await getPostsPage(page);
-      const nextChunk = uniquePostsById(chunk);
+      const nextChunk = mergePostsById(chunk);
 
       if (!nextChunk.length) {
         setHasNextPage(false);
@@ -151,7 +203,7 @@ export default function useInfinitePosts(
       }
 
       appendToCache(nextChunk);
-      setPosts((prev) => uniquePostsById([...prev, ...nextChunk]));
+      setPosts((prev) => mergePostsById(prev, nextChunk));
       setPage((p) => p + 1);
       setHasNextPage(hasMore);
     } catch (err) {

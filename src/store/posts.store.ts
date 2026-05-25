@@ -2,15 +2,6 @@ import { create } from "zustand";
 import * as postsApi from "../lib/api";
 import type { Post, PostFormData } from "../types/post";
 
-function uniquePostsById(posts: Post[]) {
-  const seen = new Set<number>();
-  return posts.filter((post) => {
-    if (seen.has(post.id)) return false;
-    seen.add(post.id);
-    return true;
-  });
-}
-
 type PostsState = {
   posts: Post[];
   loadAllPosts: () => Promise<void>;
@@ -27,13 +18,13 @@ export const usePostsStore = create<PostsState>((set, get) => ({
   posts: [],
 
   loadAllPosts: async () => {
-    const posts = uniquePostsById(await postsApi.getAllPosts());
+    const posts = await postsApi.getAllPosts();
     set({ posts });
   },
 
   appendPosts: (incoming) =>
     set((state) => ({
-      posts: uniquePostsById([...state.posts, ...incoming]),
+      posts: postsApi.mergePostsById(state.posts, incoming),
     })),
 
   removePostById: (id) =>
@@ -43,15 +34,12 @@ export const usePostsStore = create<PostsState>((set, get) => ({
 
   upsertPost: (post) =>
     set((state) => ({
-      posts: uniquePostsById([
-        post,
-        ...state.posts.filter((p) => p.id !== post.id),
-      ]),
+      posts: postsApi.mergePostsById([post], state.posts),
     })),
 
   addPostFirst: (post) =>
     set((state) => ({
-      posts: uniquePostsById([post, ...state.posts]),
+      posts: postsApi.mergePostsById([post], state.posts),
     })),
 
   createPost: async (data) => {
